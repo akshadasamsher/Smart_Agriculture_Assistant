@@ -1,0 +1,15 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.5
+joblib>=1.3
+numpy>=1.24
+
+# Only needed for /predict/crop:
+scikit-learn>=1.3
+
+# Only needed for /predict/disease (image model):
+python-multipart>=0.0.9
+torch>=2.1
+timm>=0.9
+pillow>=10.0
+opencv-python-headless>=4.8
