@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Field Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #14281F;
+    --muted: #5B6B61;
+    --pine: #17382C;
+    --pine-2: #234B3B;
+    --leaf: #2F7D4F;
+    --leaf-soft: #8FD1A3;
+    --mint: #E3EFE6;
+    --chalk: #F4F6F2;
+    --card: #FFFFFF;
+    --line: #DCE4DC;
+    --wheat: #E3A92B;
+    --clay: #BF4129;
+    --display: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+    --body: 'Figtree', 'Segoe UI', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--chalk); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+  h1, h2, h3, p { margin: 0; }
+  button { font-family: inherit; }
+  :focus-visible { outline: 2px solid var(--leaf); outline-offset: 2px; }
+
+  /* ---------- App shell: one screen on desktop, no page scroll ---------- */
+  .app { display: flex; flex-direction: column; min-height: 100dvh; }
+  .top {
+    display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+    padding: 14px 20px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-right: auto; }
+  .brand svg { width: 30px; height: 30px; }
+  .brand h1 { font-family: var(--display); font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; line-height: 1.1; }
+  .brand span { display: block; font-size: 0.78rem; color: var(--muted); }
+
+  .tabs { display: flex; gap: 4px; padding: 4px; background: var(--mint); border-radius: 12px; }
+  .tab {
+    border: 0; background: transparent; color: var(--muted); font-weight: 600; font-size: 0.9rem;
+    padding: 8px 16px; border-radius: 9px; cursor: pointer; transition: background .15s, color .15s;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab[aria-selected="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(20,40,31,.12); }
+
+  .status { display: flex; gap: 14px; font-size: 0.8rem; color: var(--muted); }
+  .pill { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #B7C2BA; }
+  .dot.on { background: var(--leaf); }
+  .dot.off { background: var(--clay); }
+
+  .banner {
+    margin: 0 20px 12px; padding: 10px 14px; border-radius: 10px; font-size: 0.86rem;
+    background: #FBEDE8; color: #7C2917; border: 1px solid #F0C9BD; display: flex; gap: 12px; align-items: center;
+  }
+  .banner[hidden] { display: none; }
+  .banner button { margin-left: auto; border: 1px solid currentColor; background: transparent; color: inherit; padding: 4px 12px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+
+  main { padding: 0 20px 20px; min-height: 0; flex: 1; }
+  .ws { height: 100%; min-height: 0; }
+  .ws[hidden] { display: none; }
+  .steps { display: none; }
+  .cols { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 16px; height: 100%; min-height: 0; }
+
+  /* ---------- Panes ---------- */
+  .pane { background: var(--card); border: 1px solid var(--line); border-radius: 16px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .pane-h { display: flex; align-items: center; gap: 10px; padding: 16px 20px 10px; }
+  .pane-h h2 { font-family: var(--display); font-size: 1.08rem; font-weight: 700; letter-spacing: -0.005em; }
+  .num { width: 24px; height: 24px; border-radius: 50%; background: var(--mint); color: var(--leaf); font-size: 0.8rem; font-weight: 700; display: grid; place-items: center; flex: none; }
+  .pane-b { flex: 1; overflow: auto; padding: 4px 20px 18px; min-height: 0; }
+  .pane-f { padding: 12px 20px 18px; border-top: 1px solid var(--line); }
+
+  .group { margin-bottom: 16px; }
+  .group > p { font-size: 0.82rem; font-weight: 600; margin-bottom: 8px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .inp label { display: block; font-size: 0.76rem; color: var(--muted); margin-bottom: 3px; }
+  .inp .box { position: relative; }
+  .inp input {
+    width: 100%; padding: 8px 34px 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--chalk); color: var(--ink); font: inherit; font-size: 0.92rem;
+  }
+  .inp input:focus { border-color: var(--leaf); background: #fff; outline: none; box-shadow: 0 0 0 3px rgba(47,125,79,.18); }
+  .inp .unit { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); font-size: 0.74rem; color: var(--muted); pointer-events: none; }
+
+  .btn {
+    width: 100%; padding: 11px 16px; border: 0; border-radius: 10px; background: var(--leaf); color: #fff;
+    font-weight: 600; font-size: 0.94rem; cursor: pointer; transition: background .15s;
+  }
+  .btn:hover:not(:disabled) { background: #276B43; }
+  .btn:disabled, .btn.alt:disabled { background: #C5D0C7; cursor: not-allowed; }
+  .btn.alt { background: var(--pine); }
+  .btn.alt:hover:not(:disabled) { background: var(--pine-2); }
+  .err { color: var(--clay); font-size: 0.84rem; margin-top: 8px; min-height: 1px; }
+  .hint { color: var(--muted); font-size: 0.8rem; margin-top: 10px; }
+
+  /* dropzone */
+  .drop {
+    position: relative; display: grid; place-items: center; text-align: center; cursor: pointer;
+    height: 260px; border: 1.5px dashed #BBC9BE; border-radius: 12px; background: var(--chalk);
+    color: var(--muted); font-size: 0.86rem; overflow: hidden; transition: border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.drag { border-color: var(--leaf); background: var(--mint); }
+  .drop input { display: none; }
+  .drop svg { width: 34px; height: 34px; color: var(--leaf); margin-bottom: 6px; }
+  .drop img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
+  .drop.has img { display: block; }
+  .drop.has .drop-t { display: none; }
+  .drop .swap { display: none; position: absolute; left: 8px; bottom: 8px; background: rgba(20,40,31,.78); color: #fff; font-size: 0.75rem; padding: 3px 9px; border-radius: 6px; }
+  .drop.has .swap { display: block; }
+
+  /* ---------- Result pane (the one dark surface) ---------- */
+  .pane.dark { background: var(--pine); border-color: var(--pine); color: #EAF3EC; }
+  .dark .pane-h h2 { color: #fff; }
+  .dark .num { background: rgba(255,255,255,.12); color: var(--leaf-soft); }
+  .empty { height: 100%; min-height: 140px; display: grid; place-content: center; text-align: center; gap: 4px; color: var(--muted); padding: 0 12px; }
+  .empty b { font-family: var(--display); font-size: 1.02rem; color: var(--ink); font-weight: 700; }
+  .dark .empty { color: #A9C2B3; }
+  .dark .empty b { color: #fff; }
+  .res[hidden], .empty[hidden] { display: none; }
+
+  .who { font-size: 0.86rem; color: #A9C2B3; }
+  .big { font-family: var(--display); font-size: clamp(1.9rem, 3.2vw, 2.8rem); font-weight: 700; line-height: 1.05; letter-spacing: -0.02em; margin: 2px 0 10px; color: #fff; text-wrap: balance; }
+  .badge { display: inline-block; font-size: 0.76rem; font-weight: 600; padding: 3px 10px; border-radius: 99px; margin-bottom: 14px; }
+  .badge.ok { background: rgba(143,209,163,.18); color: var(--leaf-soft); }
+  .badge.bad { background: rgba(240,140,115,.18); color: #F4A18C; }
+  .meter-row { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+  .meter { flex: 1; height: 8px; background: rgba(255,255,255,.14); border-radius: 99px; overflow: hidden; }
+  .meter i { display: block; height: 100%; width: 0; background: var(--leaf-soft); border-radius: 99px; transition: width .5s ease; }
+  .meter.low i { background: var(--wheat); }
+  .conf { font-weight: 600; font-size: 0.9rem; min-width: 96px; text-align: right; }
+  .warn { font-size: 0.83rem; color: #F2CB7A; margin: 8px 0 0; }
+  .sep { height: 1px; background: rgba(255,255,255,.12); margin: 18px 0 14px; }
+  .sub { font-size: 0.82rem; color: #A9C2B3; margin-bottom: 10px; }
+  .bars { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+  .bars li { display: grid; grid-template-columns: minmax(0,1fr) 46px; gap: 10px; align-items: center; font-size: 0.82rem; }
+  .bars .t { position: relative; height: 22px; border-radius: 6px; background: rgba(255,255,255,.08); overflow: hidden; }
+  .bars .f { position: absolute; inset: 0 auto 0 0; background: rgba(255,255,255,.22); border-radius: 6px; }
+  .bars li:first-child .f { background: var(--leaf-soft); }
+  .bars .n { position: relative; padding: 0 8px; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
+  .bars li:first-child .n { color: var(--pine); font-weight: 600; }
+  .bars .p { text-align: right; color: #CFE1D5; }
+
+  /* ---------- Misc ---------- */
+  .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,.5); border-top-color: transparent; border-radius: 50%; animation: rot .7s linear infinite; margin-right: 8px; vertical-align: -2px; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+
+  /* ---------- Desktop: lock to viewport ---------- */
+  @media (min-width: 1000px) {
+    .app { height: 100dvh; overflow: hidden; }
+  }
+  /* Mobile / tablet portrait: one step at a time */
+  @media (max-width: 999px) {
+    .cols { display: block; height: auto; }
+    .pane { min-height: 380px; }
+    .steps { display: flex; gap: 4px; margin-bottom: 12px; padding: 4px; background: var(--mint); border-radius: 12px; }
+    .steps button { flex: 1; border: 0; background: transparent; padding: 8px 4px; border-radius: 9px; font-weight: 600; font-size: 0.84rem; color: var(--muted); cursor: pointer; }
+    .steps button[aria-current="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(20,40,31,.12); }
+    .ws[data-step="input"] .pane:not(.pane-input),
+    .ws[data-step="result"] .pane:not(.pane-result) { display: none; }
+        .top { gap: 12px; }
+    .tabs { order: 3; width: 100%; } .tab { flex: 1; white-space: nowrap; font-size: 0.82rem; padding: 8px 6px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#17382C"/><path d="M16 25V13m0 0c0-4 3-6.5 7-6.5 0 4-3 6.5-7 6.5Zm0 4c0-3.3-2.4-5.3-5.8-5.3 0 3.3 2.4 5.3 5.8 5.3Z" fill="none" stroke="#8FD1A3" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div><h1>Field Console</h1><span>Crop and plant-health assistant</span></div>
+    </div>
+
+    <div class="tabs" role="tablist" aria-label="Tool">
+      <button class="tab" role="tab" id="tab-crop" aria-selected="true" data-tool="crop">Crop recommendation</button>
+      <button class="tab" role="tab" id="tab-disease" aria-selected="false" data-tool="disease">Leaf disease</button>
+    </div>
+
+    <div class="status" aria-live="polite">
+      <span class="pill"><span class="dot" id="dot-crop"></span><span id="st-crop">Crop model</span></span>
+      <span class="pill"><span class="dot" id="dot-disease"></span><span id="st-disease">Disease model</span></span>
+    </div>
+  </header>
+
+  <div class="banner" id="offline" role="alert" hidden>
+    <span>Can't reach the backend at <b id="api-url"></b>. Start it with <code>uvicorn main:app --port 8000</code>.</span>
+    <button onclick="checkHealth()">Retry</button>
+  </div>
+
+  <main>
+    <!-- ============ CROP ============ -->
+    <section class="ws" id="ws-crop" data-step="input" aria-labelledby="tab-crop">
+      <div class="steps" role="group" aria-label="Steps">
+        <button data-go="input" aria-current="true">1 Input</button>
+        <button data-go="result">2 Result</button>
+      </div>
+      <div class="cols">
+        <article class="pane pane-input">
+          <div class="pane-h"><span class="num">1</span><h2>Soil and climate</h2></div>
+          <div class="pane-b">
+            <div class="group">
+              <p>Soil nutrients</p>
+              <div class="grid3">
+                <div class="inp"><label for="N">Nitrogen</label><div class="box"><input type="number" id="N" value="90"></div></div>
+                <div class="inp"><label for="P">Phosphorus</label><div class="box"><input type="number" id="P" value="42"></div></div>
+                <div class="inp"><label for="K">Potassium</label><div class="box"><input type="number" id="K" value="43"></div></div>
+              </div>
+            </div>
+            <div class="group">
+              <p>Conditions</p>
+              <div class="grid2">
+                <div class="inp"><label for="ph">Soil pH</label><div class="box"><input type="number" step="0.1" id="ph" value="6.5"></div></div>
+                <div class="inp"><label for="temperature">Temperature</label><div class="box"><input type="number" step="0.1" id="temperature" value="20.9"><span class="unit">°C</span></div></div>
+                <div class="inp"><label for="humidity">Humidity</label><div class="box"><input type="number" step="0.1" id="humidity" value="82"><span class="unit">%</span></div></div>
+                <div class="inp"><label for="rainfall">Rainfall</label><div class="box"><input type="number" step="0.1" id="rainfall" value="202.9"><span class="unit">mm</span></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-f">
+            <button class="btn" id="crop-btn">Recommend a crop</button>
+            <div class="err" id="crop-err" role="alert"></div>
+          </div>
+        </article>
+
+        <article class="pane pane-result dark">
+          <div class="pane-h"><span class="num">2</span><h2>Recommendation</h2></div>
+          <div class="pane-b" aria-live="polite">
+            <div class="empty" id="crop-empty"><b>No result yet</b><span>Enter your readings and choose Recommend a crop.</span></div>
+            <div class="res" id="crop-res" hidden>
+              <p class="who">Best match for these conditions</p>
+              <h3 class="big" id="crop-name"></h3>
+              <div class="meter-row"><div class="meter" id="crop-meter"><i></i></div><span class="conf" id="crop-conf"></span></div>
+              <div class="sep"></div>
+              <p class="sub">Other candidates</p>
+              <ul class="bars" id="crop-bars"></ul>
+            </div>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <!-- ============ DISEASE ============ -->
+    <section class="ws" id="ws-disease" data-step="input" hidden aria-labelledby="tab-disease">
+      <div class="steps" role="group" aria-label="Steps">
+        <button data-go="input" aria-current="true">1 Photo</button>
+        <button data-go="result">2 Result</button>
+      </div>
+      <div class="cols">
+        <article class="pane pane-input">
+          <div class="pane-h"><span class="num">1</span><h2>Leaf photo</h2></div>
+          <div class="pane-b">
+            <label class="drop" id="drop" for="leaf-file">
+              <div class="drop-t">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+                <div>Choose a photo or drop it here</div>
+                <div style="font-size:.76rem">JPG or PNG, up to 10 MB</div>
+              </div>
+              <img id="leaf-img" alt="Selected leaf">
+              <span class="swap">Change photo</span>
+              <input type="file" id="leaf-file" accept="image/*">
+            </label>
+            <p class="hint">Works best with one leaf, good light and a plain background. Covers 29 plant and disease classes, including apple, tomato, potato, corn, grape and more.</p>
+          </div>
+          <div class="pane-f">
+            <button class="btn" id="disease-btn" disabled>Check for disease</button>
+            <div class="err" id="disease-err" role="alert"></div>
+          </div>
+        </article>
+
+        <article class="pane pane-result dark">
+          <div class="pane-h"><span class="num">2</span><h2>Diagnosis</h2></div>
+          <div class="pane-b" aria-live="polite">
+            <div class="empty" id="disease-empty"><b>No result yet</b><span>Add a leaf photo and choose Check for disease.</span></div>
+            <div class="res" id="disease-res" hidden>
+              <p class="who" id="disease-plant"></p>
+              <h3 class="big" id="disease-name"></h3>
+              <span class="badge" id="disease-badge"></span>
+              <div class="meter-row"><div class="meter" id="disease-meter"><i></i></div><span class="conf" id="disease-conf"></span></div>
+              <p class="warn" id="disease-warn" hidden>Low confidence. Retake the photo with one leaf in good light, or ask an expert.</p>
+              <div class="sep"></div>
+              <p class="sub">Top matches</p>
+              <ul class="bars" id="disease-bars"></ul>
+            </div>
+          </div>
+        </article>
+
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+const API_BASE = window.API_BASE || (location.protocol === "file:" ? "http://127.0.0.1:8000" : location.origin);
+const $ = id => document.getElementById(id);
+document.getElementById('api-url').textContent = API_BASE;
+
+/* ---------- Tabs & mobile steps ---------- */
+function showTool(tool) {
+  ['crop', 'disease'].forEach(t => {
+    $('ws-' + t).hidden = t !== tool;
+    $('tab-' + t).setAttribute('aria-selected', String(t === tool));
+  });
+}
+document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => showTool(b.dataset.tool)));
+
+function setStep(tool, step) {
+  const ws = $('ws-' + tool);
+  ws.dataset.step = step;
+  ws.querySelectorAll('.steps button').forEach(b =>
+    b.setAttribute('aria-current', String(b.dataset.go === step)));
+}
+document.querySelectorAll('.ws').forEach(ws =>
+  ws.querySelectorAll('.steps button').forEach(b =>
+    b.addEventListener('click', () => setStep(ws.id.replace('ws-', ''), b.dataset.go))));
+
+/* ---------- Health ---------- */
+async function checkHealth() {
+  try {
+    const d = await (await fetch(`${API_BASE}/health`)).json();
+    $('offline').hidden = true;
+    setDot('crop', d.crop_model_loaded, 'Crop model');
+    setDot('disease', d.disease_model_loaded, 'Disease model');
+  } catch (e) {
+    $('offline').hidden = false;
+    setDot('crop', false, 'Crop model');
+    setDot('disease', false, 'Disease model');
+  }
+}
+function setDot(k, ok, name) {
+  $('dot-' + k).className = 'dot ' + (ok ? 'on' : 'off');
+  $('st-' + k).textContent = name + (ok ? ' ready' : ' offline');
+}
+
+/* ---------- Shared helpers ---------- */
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const pct = x => (x * 100).toFixed(1) + '%';
+
+function drawBars(ul, items) {
+  ul.replaceChildren();
+  items.forEach(it => {
+    const li = document.createElement('li');
+    const t = document.createElement('div'); t.className = 't';
+    const f = document.createElement('div'); f.className = 'f'; f.style.width = Math.max(it.value * 100, 1) + '%';
+    const n = document.createElement('span'); n.className = 'n'; n.textContent = it.name;
+    t.append(f, n);
+    const p = document.createElement('div'); p.className = 'p'; p.textContent = Math.round(it.value * 100) + '%';
+    li.append(t, p);
+    ul.appendChild(li);
+  });
+}
+function setMeter(tool, conf) {
+  const m = $(tool + '-meter');
+  m.classList.toggle('low', conf < 0.7);
+  requestAnimationFrame(() => { m.firstElementChild.style.width = (conf * 100) + '%'; });
+  $(tool + '-conf').textContent = pct(conf) + ' sure';
+}
+async function apiError(res, fallback) {
+  try { return (await res.json()).detail || fallback; } catch (_) { return fallback; }
+}
+function busy(btn, text) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>' + text; }
+
+/* ---------- Crop ---------- */
+$('crop-btn').addEventListener('click', async () => {
+  const btn = $('crop-btn'), err = $('crop-err'); err.textContent = '';
+  const ids = ['N', 'P', 'K', 'temperature', 'humidity', 'ph', 'rainfall'];
+  const payload = {};
+  for (const id of ids) {
+    const v = parseFloat($(id).value);
+    if (Number.isNaN(v)) { err.textContent = 'Fill in every field with a number.'; return; }
+    payload[id] = v;
+  }
+  busy(btn, 'Analysing…');
+  try {
+    const res = await fetch(`${API_BASE}/predict/crop`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(await apiError(res, 'Prediction failed'));
+    const d = await res.json();
+    $('crop-name').textContent = cap(d.crop);
+    setMeter('crop', d.confidence);
+    drawBars($('crop-bars'), (d.top_k || []).map(t => ({ name: cap(t.crop), value: t.confidence })));
+    $('crop-empty').hidden = true; $('crop-res').hidden = false;
+    setStep('crop', 'result');
+  } catch (e) {
+    err.textContent = e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Recommend a crop';
+  }
+});
+
+/* ---------- Disease ---------- */
+let leafFile = null;
+const drop = $('drop'), fileInput = $('leaf-file');
+
+function setFile(file) {
+  const err = $('disease-err'); err.textContent = '';
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { err.textContent = 'Choose an image file (JPG or PNG).'; return; }
+  if (file.size > 10 * 1024 * 1024) { err.textContent = 'That image is over 10 MB. Choose a smaller one.'; return; }
+  leafFile = file;
+  const img = $('leaf-img');
+  if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+  img.dataset.url = URL.createObjectURL(file); img.src = img.dataset.url;
+  drop.classList.add('has');
+  $('disease-btn').disabled = false;
+}
+fileInput.addEventListener('change', () => setFile(fileInput.files[0]));
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+drop.addEventListener('drop', e => setFile(e.dataTransfer.files[0]));
+
+$('disease-btn').addEventListener('click', async () => {
+  if (!leafFile) return;
+  const btn = $('disease-btn'), err = $('disease-err'); err.textContent = '';
+  busy(btn, 'Analysing…');
+  try {
+    const form = new FormData(); form.append('file', leafFile);
+    const res = await fetch(`${API_BASE}/predict/disease`, { method: 'POST', body: form });
+    if (!res.ok) throw new Error(await apiError(res, 'Detection failed'));
+    const d = await res.json();
+    $('disease-plant').textContent = d.plant;
+    $('disease-name').textContent = d.healthy ? 'Healthy' : d.condition;
+    const badge = $('disease-badge');
+    badge.textContent = d.healthy ? 'No disease detected' : 'Disease detected';
+    badge.className = 'badge ' + (d.healthy ? 'ok' : 'bad');
+    setMeter('disease', d.confidence);
+    $('disease-warn').hidden = !d.low_confidence;
+    drawBars($('disease-bars'), d.top_k.map(t => ({ name: t.label.replace(' - ', ': '), value: t.confidence })));
+    $('disease-empty').hidden = true; $('disease-res').hidden = false;
+    setStep('disease', 'result');
+  } catch (e) {
+    err.textContent = e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Check for disease';
+  }
+});
+
+checkHealth();
+</script>
+</body>
+</html>
