@@ -4,6 +4,9 @@ Plant disease detection (EfficientNetV2-S, 29 PlantVillage classes).
 Loads the checkpoint saved by training/disease_detection_train.ipynb:
     {'model_state': ..., 'class_names': [...], 'epoch': ..., 'val_acc': ...}
 
+Also supports the compressed files (model_fp16.pth, model_weights.pth,
+model_int8.pth) created by quant.py / quant_int8.py.
+
 torch/timm are imported lazily so the crop-recommendation API still runs
 on machines that don't have them installed.
 
@@ -26,8 +29,14 @@ IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 MODEL_NAME = "tf_efficientnetv2_s"
 
 _HERE = Path(__file__).parent
+_MODEL_DIR = _HERE / "models" / "detection"
+
+# First file found is used (smallest first).
 _CANDIDATES = [
-    _HERE / "models" / "detection" / "disease_detection_model.pth",
+    _MODEL_DIR / "model_int8.pth",
+    _MODEL_DIR / "model_fp16.pth",
+    _MODEL_DIR / "model_weights.pth",
+    _MODEL_DIR / "disease_detection_model.pth",
     _HERE / "models" / "disease_detection_model.pth",
     _HERE.parent / "disease_detection_model.pth",
 ]
@@ -67,6 +76,22 @@ def _build_net(num_classes: int):
     return PlantDiseaseNet(num_classes)
 
 
+def _to_fp32_state(raw: dict) -> dict:
+    """Handles original FP32, FP16 and packed INT8 state dicts."""
+    import torch
+
+    state = {}
+    for k, v in raw.items():
+        if isinstance(v, dict):  # INT8 packed weight: {'q': int8, 'scale': fp16}
+            q, scale = v["q"].float(), v["scale"].float()
+            state[k] = q * scale.reshape([-1] + [1] * (q.ndim - 1))
+        elif torch.is_tensor(v) and v.is_floating_point():
+            state[k] = v.float()  # FP16 -> FP32
+        else:
+            state[k] = v  # ints like num_batches_tracked
+    return state
+
+
 def load_disease_model(path: Path | None = None) -> dict:
     """Returns {'model', 'class_names', 'device'}. Raises FileNotFoundError / ImportError."""
     import torch
@@ -83,7 +108,7 @@ def load_disease_model(path: Path | None = None) -> dict:
 
     class_names = list(ckpt["class_names"])
     model = _build_net(len(class_names))
-    model.load_state_dict(ckpt["model_state"])
+    model.load_state_dict(_to_fp32_state(ckpt["model_state"]))
     model.eval()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
