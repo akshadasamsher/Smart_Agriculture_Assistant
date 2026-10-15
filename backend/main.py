@@ -20,6 +20,7 @@ with a clear message instead of crashing the whole app.
 """
 
 import os
+import traceback
 from pathlib import Path
 
 import joblib
@@ -49,7 +50,7 @@ app.add_middleware(
 # Model registry - lazy-loaded once at startup, missing files are tolerated
 # ---------------------------------------------------------------------------
 
-_state: dict = {"crop": None, "disease": None}
+_state: dict = {"crop": None, "disease": None, "disease_error": None}
 
 LOW_CONFIDENCE = 0.70
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
@@ -68,15 +69,20 @@ def load_models():
         print("[startup] Crop model artifacts not found - /predict/crop will 503 until trained.")
 
     try:
-        from disease import load_disease_model
+        from disease import load_disease_model, find_checkpoint
+        print(f"[startup] Disease checkpoint: {find_checkpoint()}")
         _state["disease"] = load_disease_model()
         print(f"[startup] Disease model loaded ({len(_state['disease']['class_names'])} classes).")
     except FileNotFoundError:
+        _state["disease_error"] = "Disease checkpoint not found"
         print("[startup] Disease checkpoint not found - /predict/disease will 503.")
     except ImportError as e:
+        _state["disease_error"] = f"Missing package: {e}"
         print(f"[startup] Disease model needs extra packages ({e}) - pip install torch timm opencv-python-headless")
     except Exception as e:  # corrupt checkpoint, key mismatch, etc.
+        _state["disease_error"] = f"{type(e).__name__}: {e}"
         print(f"[startup] Disease model failed to load: {e}")
+        traceback.print_exc()
 
 
 @app.get("/health")
@@ -85,6 +91,7 @@ def health():
         "status": "ok",
         "crop_model_loaded": _state["crop"] is not None,
         "disease_model_loaded": _state["disease"] is not None,
+        "disease_error": _state["disease_error"],
     }
 
 
